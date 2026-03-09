@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 
 from requests import HTTPError
@@ -26,11 +27,14 @@ def load_vacancies(
     pages: int,
     per_page: int,
     only_with_salary: bool,
+    cooldown_403_threshold: int = 5,
+    cooldown_403_sec: float = 90.0,
 ) -> LoadStats:
     stats = LoadStats()
     errors_shown = 0
     max_errors_to_show = 10
     error_sample: str | None = None
+    consecutive_403 = 0
 
     run_id = start_parse_run(conn, query, area, pages, per_page, only_with_salary)
     conn.commit()
@@ -64,16 +68,33 @@ def load_vacancies(
                     save_vacancy_with_skills(conn, vacancy, skills)
                     conn.commit()
                     stats.vacancies_saved += 1
+                    consecutive_403 = 0
                 except HTTPError as exc:
                     conn.rollback()
                     stats.vacancies_failed += 1
                     error_sample = error_sample or str(exc)
+                    status_code = exc.response.status_code if exc.response is not None else None
+                    if status_code == 403:
+                        consecutive_403 += 1
+                        threshold = max(1, cooldown_403_threshold)
+                        if consecutive_403 >= threshold:
+                            cooldown = max(1.0, cooldown_403_sec)
+                            print(
+                                "[COOLDOWN] "
+                                f"query='{query}' got {consecutive_403} consecutive 403 responses; "
+                                f"sleeping {int(cooldown)} sec"
+                            )
+                            time.sleep(cooldown)
+                            consecutive_403 = 0
+                    else:
+                        consecutive_403 = 0
                     if errors_shown < max_errors_to_show:
                         print(f"[HTTP ERROR] vacancy_id={vacancy_id}: {exc}")
                         errors_shown += 1
                 except Exception as exc:
                     conn.rollback()
                     stats.vacancies_failed += 1
+                    consecutive_403 = 0
                     error_sample = error_sample or f"{type(exc).__name__}: {exc}"
                     if errors_shown < max_errors_to_show:
                         print(f"[SAVE ERROR] vacancy_id={vacancy_id}: {type(exc).__name__}: {exc}")
@@ -103,4 +124,3 @@ def load_vacancies(
         )
         conn.commit()
         raise
-

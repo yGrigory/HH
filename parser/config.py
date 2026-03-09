@@ -18,6 +18,10 @@ class Settings:
     hh_user_agent: str
     hh_timeout_sec: int
     hh_sleep_between_requests_sec: float
+    hh_retry_attempts: int
+    hh_retry_backoff_sec: float
+    hh_403_cooldown_threshold: int
+    hh_403_cooldown_sec: float
 
 
 def _load_dotenv_file(path: Path) -> None:
@@ -54,6 +58,10 @@ def get_settings() -> Settings:
         hh_user_agent=os.getenv("HH_USER_AGENT", "HHParserBot/2.0"),
         hh_timeout_sec=int(os.getenv("HH_TIMEOUT_SEC", "20")),
         hh_sleep_between_requests_sec=float(
-            os.getenv("HH_SLEEP_BETWEEN_REQUESTS_SEC", "0.25")
+            os.getenv("HH_SLEEP_BETWEEN_REQUESTS_SEC", "1.0")
         ),
+        hh_retry_attempts=int(os.getenv("HH_RETRY_ATTEMPTS", "4")),
+        hh_retry_backoff_sec=float(os.getenv("HH_RETRY_BACKOFF_SEC", "2.0")),
+        hh_403_cooldown_threshold=int(os.getenv("HH_403_COOLDOWN_THRESHOLD", "5")),
+        hh_403_cooldown_sec=float(os.getenv("HH_403_COOLDOWN_SEC", "90")),
     )

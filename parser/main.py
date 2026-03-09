@@ -50,6 +50,8 @@ def run() -> None:
                 pages=args.pages,
                 per_page=args.per_page,
                 only_with_salary=args.with_salary_only,
+                cooldown_403_threshold=settings.hh_403_cooldown_threshold,
+                cooldown_403_sec=settings.hh_403_cooldown_sec,
             )
     except OperationalError as exc:
         raise SystemExit(

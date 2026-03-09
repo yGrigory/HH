@@ -75,6 +75,8 @@ def main() -> None:
                         pages=pages,
                         per_page=per_page,
                         only_with_salary=only_with_salary,
+                        cooldown_403_threshold=settings.hh_403_cooldown_threshold,
+                        cooldown_403_sec=settings.hh_403_cooldown_sec,
                     )
                 total_seen += stats.vacancies_seen
                 total_saved += stats.vacancies_saved

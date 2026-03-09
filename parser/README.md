@@ -30,6 +30,8 @@ Key loop settings in `.env`:
 - `IT_WITH_SALARY_ONLY`
 - `IT_QUERIES` (comma-separated, optional)
 - `IT_RECREATE_ON_START` (use `true` only when you want full reset)
+- `HH_SLEEP_BETWEEN_REQUESTS_SEC`, `HH_RETRY_ATTEMPTS`, `HH_RETRY_BACKOFF_SEC`
+- `HH_403_COOLDOWN_THRESHOLD`, `HH_403_COOLDOWN_SEC` (global cooldown on repeated 403)
 
 ## Deploy To Server (Docker)
 1. Install Docker + Docker Compose plugin on server.
