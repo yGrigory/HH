@@ -27,6 +27,7 @@ def load_vacancies(
     pages: int,
     per_page: int,
     only_with_salary: bool,
+    max_vacancies_per_query: int | None = None,
     cooldown_403_threshold: int = 5,
     cooldown_403_sec: float = 90.0,
 ) -> LoadStats:
@@ -41,7 +42,14 @@ def load_vacancies(
     stats.parse_run_id = run_id
 
     try:
+        target_saved = None
+        if max_vacancies_per_query is not None and max_vacancies_per_query > 0:
+            target_saved = max_vacancies_per_query
+
         for page in range(pages):
+            if target_saved is not None and stats.vacancies_saved >= target_saved:
+                break
+
             payload = hh_client.search_vacancies(
                 query=query,
                 area=area,
@@ -55,6 +63,8 @@ def load_vacancies(
 
             stats.pages_scanned += 1
             for item in items:
+                if target_saved is not None and stats.vacancies_saved >= target_saved:
+                    break
                 stats.vacancies_seen += 1
                 vacancy_id = item.get("id")
                 if not vacancy_id:

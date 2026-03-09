@@ -24,9 +24,19 @@ def _parse_bool(value: str | None, default: bool = False) -> bool:
 
 def _load_queries() -> list[str]:
     raw = os.getenv("IT_QUERIES", "").strip()
-    if not raw:
-        return DEFAULT_IT_QUERIES
-    return [part.strip() for part in raw.split(",") if part.strip()]
+    source = DEFAULT_IT_QUERIES if not raw else [part.strip() for part in raw.split(",")]
+    unique_queries: list[str] = []
+    seen: set[str] = set()
+    for query in source:
+        query = query.strip()
+        if not query:
+            continue
+        key = query.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_queries.append(query)
+    return unique_queries
 
 
 def main() -> None:
@@ -34,9 +44,10 @@ def main() -> None:
     client = HHClient(settings)
 
     area = int(os.getenv("IT_AREA", "113"))
-    pages = int(os.getenv("IT_PAGES", "3"))
-    per_page = int(os.getenv("IT_PER_PAGE", "20"))
-    only_with_salary = _parse_bool(os.getenv("IT_WITH_SALARY_ONLY"), True)
+    pages = max(1, int(os.getenv("IT_PAGES", "20")))
+    per_page = max(1, min(100, int(os.getenv("IT_PER_PAGE", "100"))))
+    target_per_query = max(1, int(os.getenv("IT_TARGET_PER_QUERY", "100")))
+    only_with_salary = _parse_bool(os.getenv("IT_WITH_SALARY_ONLY"), False)
     interval_minutes = int(os.getenv("IT_LOOP_INTERVAL_MINUTES", "60"))
     recreate_on_start = _parse_bool(os.getenv("IT_RECREATE_ON_START"), False)
     run_once = _parse_bool(os.getenv("IT_RUN_ONCE"), False)
@@ -75,6 +86,7 @@ def main() -> None:
                         pages=pages,
                         per_page=per_page,
                         only_with_salary=only_with_salary,
+                        max_vacancies_per_query=target_per_query,
                         cooldown_403_threshold=settings.hh_403_cooldown_threshold,
                         cooldown_403_sec=settings.hh_403_cooldown_sec,
                     )
@@ -86,6 +98,7 @@ def main() -> None:
                     f"seen={stats.vacancies_seen} "
                     f"saved={stats.vacancies_saved} "
                     f"failed={stats.vacancies_failed} "
+                    f"target={target_per_query} "
                     f"run_id={stats.parse_run_id}"
                 )
             except Exception as exc:

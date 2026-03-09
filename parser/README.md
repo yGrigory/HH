@@ -26,6 +26,7 @@
 
 Key loop settings in `.env`:
 - `IT_PAGES`, `IT_PER_PAGE`
+- `IT_TARGET_PER_QUERY` (target count per query per cycle, default 100)
 - `IT_LOOP_INTERVAL_MINUTES`
 - `IT_WITH_SALARY_ONLY`
 - `IT_QUERIES` (comma-separated, optional)
