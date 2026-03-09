@@ -27,6 +27,7 @@ def load_vacancies(
     pages: int,
     per_page: int,
     only_with_salary: bool,
+    date_from: str | None = None,
     max_vacancies_per_query: int | None = None,
     cooldown_403_threshold: int = 5,
     cooldown_403_sec: float = 90.0,
@@ -56,6 +57,7 @@ def load_vacancies(
                 page=page,
                 per_page=per_page,
                 only_with_salary=only_with_salary,
+                date_from=date_from,
             )
             items = payload.get("items", [])
             if not items:

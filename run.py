@@ -1,6 +1,6 @@
 ﻿import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from psycopg2 import OperationalError
 
@@ -49,6 +49,7 @@ def main() -> None:
     target_per_query = max(1, int(os.getenv("IT_TARGET_PER_QUERY", "100")))
     only_with_salary = _parse_bool(os.getenv("IT_WITH_SALARY_ONLY"), False)
     interval_minutes = int(os.getenv("IT_LOOP_INTERVAL_MINUTES", "60"))
+    period_days = max(1, int(os.getenv("IT_PERIOD_DAYS", "60")))
     recreate_on_start = _parse_bool(os.getenv("IT_RECREATE_ON_START"), False)
     run_once = _parse_bool(os.getenv("IT_RUN_ONCE"), False)
     queries = _load_queries()
@@ -70,7 +71,13 @@ def main() -> None:
     cycle = 0
     while True:
         cycle += 1
-        print(f"[{_now_utc()}] cycle={cycle} started, queries={len(queries)}")
+        date_from = (datetime.now(timezone.utc) - timedelta(days=period_days)).isoformat(
+            timespec="seconds"
+        )
+        print(
+            f"[{_now_utc()}] cycle={cycle} started, queries={len(queries)}, "
+            f"period_days={period_days}"
+        )
         total_seen = 0
         total_saved = 0
         total_failed = 0
@@ -86,6 +93,7 @@ def main() -> None:
                         pages=pages,
                         per_page=per_page,
                         only_with_salary=only_with_salary,
+                        date_from=date_from,
                         max_vacancies_per_query=target_per_query,
                         cooldown_403_threshold=settings.hh_403_cooldown_threshold,
                         cooldown_403_sec=settings.hh_403_cooldown_sec,
