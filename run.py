@@ -46,9 +46,10 @@ def main() -> None:
     area = int(os.getenv("IT_AREA", "113"))
     pages = max(1, int(os.getenv("IT_PAGES", "20")))
     per_page = max(1, min(100, int(os.getenv("IT_PER_PAGE", "100"))))
-    target_per_query = max(1, int(os.getenv("IT_TARGET_PER_QUERY", "100")))
+    target_raw = int(os.getenv("IT_TARGET_PER_QUERY", "0"))
+    target_per_query = target_raw if target_raw > 0 else None
     only_with_salary = _parse_bool(os.getenv("IT_WITH_SALARY_ONLY"), False)
-    interval_minutes = int(os.getenv("IT_LOOP_INTERVAL_MINUTES", "60"))
+    interval_minutes = int(os.getenv("IT_LOOP_INTERVAL_MINUTES", "5"))
     period_days = max(1, int(os.getenv("IT_PERIOD_DAYS", "60")))
     recreate_on_start = _parse_bool(os.getenv("IT_RECREATE_ON_START"), False)
     run_once = _parse_bool(os.getenv("IT_RUN_ONCE"), False)
@@ -56,6 +57,13 @@ def main() -> None:
 
     if not queries:
         raise SystemExit("No IT queries configured. Set IT_QUERIES or use defaults.")
+
+    target_label = "unlimited" if target_per_query is None else str(target_per_query)
+    print(
+        f"[{_now_utc()}] settings: area={area} pages={pages} per_page={per_page} "
+        f"target_per_query={target_label} period_days={period_days} "
+        f"with_salary_only={only_with_salary} loop_interval_min={interval_minutes}"
+    )
 
     try:
         with connection_scope(settings) as conn:
@@ -106,7 +114,7 @@ def main() -> None:
                     f"seen={stats.vacancies_seen} "
                     f"saved={stats.vacancies_saved} "
                     f"failed={stats.vacancies_failed} "
-                    f"target={target_per_query} "
+                    f"target={target_label} "
                     f"run_id={stats.parse_run_id}"
                 )
             except Exception as exc:
