@@ -104,17 +104,31 @@ def main() -> None:
                     v.currency,
                     v.published_at,
                     v.vacancy_url,
+                    v.snippet_requirement,
+                    v.snippet_responsibility,
+                    v.description,
                     COALESCE(
                         STRING_AGG(DISTINCT s.name, ', ' ORDER BY s.name),
                         ''
-                    ) AS skills
+                    ) AS skills,
+                    ve.hard_skills_norm,
+                    ve.level_hints,
+                    ve.english_level,
+                    ve.responsibility_tags,
+                    ve.benefit_tags,
+                    ve.description_len,
+                    ve.requirements_len
                 FROM vacancies v
                 LEFT JOIN vacancy_skills vs ON vs.vacancy_id = v.id
                 LEFT JOIN skills s ON s.id = vs.skill_id
+                LEFT JOIN vacancy_enrichment ve ON ve.vacancy_id = v.id
                 GROUP BY
                     v.id, v.hh_id, v.title, v.area, v.employer, v.grade,
                     v.experience, v.employment, v.schedule, v.salary_min,
-                    v.salary_max, v.currency, v.published_at, v.vacancy_url
+                    v.salary_max, v.currency, v.published_at, v.vacancy_url,
+                    v.snippet_requirement, v.snippet_responsibility, v.description,
+                    ve.hard_skills_norm, ve.level_hints, ve.english_level,
+                    ve.responsibility_tags, ve.benefit_tags, ve.description_len, ve.requirements_len
                 ORDER BY v.published_at DESC NULLS LAST, v.id DESC
                 LIMIT 5;
                 """
@@ -136,7 +150,17 @@ def main() -> None:
                     currency,
                     published_at,
                     vacancy_url,
+                    snippet_requirement,
+                    snippet_responsibility,
+                    description,
                     skills_csv,
+                    hard_skills_norm,
+                    level_hints,
+                    english_level,
+                    responsibility_tags,
+                    benefit_tags,
+                    description_len,
+                    requirements_len,
                 ) = row
                 print("\n------------------------------")
                 print(f"id: {v_id}, hh_id: {hh_id}")
@@ -149,6 +173,22 @@ def main() -> None:
                 print(f"published_at: {published_at}")
                 print(f"url: {vacancy_url}")
                 print(f"skills: {skills_csv if skills_csv else '(no skills)'}")
+                req = (snippet_requirement or "").strip()
+                resp = (snippet_responsibility or "").strip()
+                desc = (description or "").strip()
+                print(f"snippet_requirement: {req[:220] if req else '(empty)'}")
+                print(f"snippet_responsibility: {resp[:220] if resp else '(empty)'}")
+                print(f"description_preview: {desc[:220] if desc else '(empty)'}")
+                print(
+                    "enrichment: "
+                    f"hard_skills_norm={hard_skills_norm or []}, "
+                    f"level_hints={level_hints or []}, "
+                    f"english_level={english_level}, "
+                    f"responsibility_tags={responsibility_tags or []}, "
+                    f"benefit_tags={benefit_tags or []}, "
+                    f"description_len={description_len}, "
+                    f"requirements_len={requirements_len}"
+                )
 
 
 if __name__ == "__main__":
