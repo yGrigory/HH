@@ -1,0 +1,23 @@
+DEFAULT_IT_QUERIES = [
+    "python developer",
+    "backend developer",
+    "frontend developer",
+    "fullstack developer",
+    "data analyst",
+    "data scientist",
+    "machine learning engineer",
+    "devops engineer",
+    "qa engineer",
+    "site reliability engineer",
+    "product manager it",
+    "system analyst",
+    "business analyst it",
+    "mobile developer",
+    "java developer",
+    "golang developer",
+    "c# developer",
+    "1c developer",
+    "sql developer",
+    "etl developer",
+]
+

@@ -1,0 +1,8 @@
+﻿services:
+  hh_parser:
+    build: .
+    container_name: hh_parser
+    restart: unless-stopped
+    env_file:
+      - .env
+    command: ["python", "run.py"]

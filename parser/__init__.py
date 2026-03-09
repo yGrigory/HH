@@ -1,0 +1,2 @@
+"""HH vacancies parser package."""
+
