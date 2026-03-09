@@ -70,6 +70,18 @@ CREATE TABLE IF NOT EXISTS vacancy_salary_features (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS vacancy_enrichment (
+    vacancy_id BIGINT PRIMARY KEY REFERENCES vacancies(id) ON DELETE CASCADE,
+    hard_skills_norm TEXT[],
+    level_hints TEXT[],
+    english_level TEXT,
+    responsibility_tags TEXT[],
+    benefit_tags TEXT[],
+    description_len INTEGER,
+    requirements_len INTEGER,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS parse_runs (
     id BIGSERIAL PRIMARY KEY,
     started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -94,10 +106,15 @@ CREATE INDEX IF NOT EXISTS idx_vacancies_role_id ON vacancies(professional_role_
 CREATE INDEX IF NOT EXISTS idx_vacancies_hh_exp ON vacancies(hh_experience_id);
 CREATE INDEX IF NOT EXISTS idx_vacancies_area ON vacancies(area);
 CREATE INDEX IF NOT EXISTS idx_parse_runs_started_at ON parse_runs(started_at);
+CREATE INDEX IF NOT EXISTS idx_vacancy_enrichment_eng ON vacancy_enrichment(english_level);
+CREATE INDEX IF NOT EXISTS idx_vacancy_enrichment_skills ON vacancy_enrichment USING GIN(hard_skills_norm);
+CREATE INDEX IF NOT EXISTS idx_vacancy_enrichment_resp ON vacancy_enrichment USING GIN(responsibility_tags);
+CREATE INDEX IF NOT EXISTS idx_vacancy_enrichment_benefits ON vacancy_enrichment USING GIN(benefit_tags);
 """
 
 
 DROP_DDL = """
+DROP TABLE IF EXISTS vacancy_enrichment;
 DROP TABLE IF EXISTS vacancy_salary_features;
 DROP TABLE IF EXISTS vacancy_skills;
 DROP TABLE IF EXISTS skills;
@@ -115,4 +132,3 @@ def recreate_schema(conn: PgConnection) -> None:
     with conn.cursor() as cur:
         cur.execute(DROP_DDL)
         cur.execute(DDL)
-
