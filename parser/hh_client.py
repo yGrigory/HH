@@ -84,6 +84,7 @@ class HHClient:
             "page": page,
             "per_page": per_page,
             "only_with_salary": only_with_salary,
+            "search_field": "name",
         }
         if date_from:
             params["date_from"] = date_from

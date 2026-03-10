@@ -16,7 +16,8 @@ def _parse_iso_datetime(value: str | None) -> datetime | None:
 def detect_grade(experience_name: str | None) -> str:
     if not experience_name:
         return "Unknown"
-    exp = experience_name.lower()
+
+    exp = experience_name.casefold()
     if "нет опыта" in exp or "no experience" in exp:
         return "Junior"
     if "1" in exp and "3" in exp:
@@ -103,4 +104,3 @@ def build_vacancy(details: dict[str, Any], query: str) -> dict[str, Any]:
         "api_url": details.get("url"),
         "raw_json": details,
     }
-

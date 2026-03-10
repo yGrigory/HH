@@ -1,154 +1,259 @@
 from __future__ import annotations
 
+import html
 import re
-from html import unescape
+from collections.abc import Iterable
 
 
-_SKILL_PATTERNS: dict[str, tuple[str, ...]] = {
-    "Python": ("python",),
-    "Java": (" java ", " spring ", "kotlin"),
-    "JavaScript": ("javascript", " js ", "ecmascript"),
-    "TypeScript": ("typescript", " ts "),
-    "SQL": (" sql ", "postgresql", "mysql", "clickhouse"),
-    "PostgreSQL": ("postgresql", "postgres "),
-    "MySQL": ("mysql",),
-    "ClickHouse": ("clickhouse",),
-    "Redis": ("redis",),
-    "MongoDB": ("mongodb", "mongo "),
-    "Docker": ("docker",),
-    "Kubernetes": ("kubernetes", "k8s"),
-    "Linux": ("linux",),
-    "Git": (" git ", "github", "gitlab", "bitbucket"),
-    "REST API": ("rest api", "restful", "http api"),
-    "GraphQL": ("graphql",),
-    "FastAPI": ("fastapi",),
-    "Django": ("django",),
-    "Flask": ("flask",),
-    "Pandas": ("pandas",),
-    "NumPy": ("numpy",),
-    "Airflow": ("airflow",),
-    "Spark": ("spark", "pyspark"),
-    "1C": ("1с", "1c"),
-    "C#": ("c#", ".net", "asp.net", "dotnet"),
-    "C++": ("c++",),
-    "Go": (" golang", " go "),
-    "PHP": (" php ", "laravel", "symfony"),
-    "Node.js": ("node.js", "nodejs", "node "),
-    "React": ("react", "next.js", "nextjs"),
-    "Vue": ("vue", "nuxt"),
-    "Angular": ("angular",),
-}
-
-_RESPONSIBILITY_PATTERNS: dict[str, tuple[str, ...]] = {
-    "backend": ("backend", "бекенд", "server-side", "api"),
-    "frontend": ("frontend", "фронтенд", "ui", "spa"),
-    "fullstack": ("fullstack", "full stack", "full-stack"),
-    "data": ("data engineer", "аналитик", "bi", "ml", "machine learning"),
-    "devops": ("devops", "sre", "ci/cd", "инфраструктур"),
-    "management": ("team lead", "руковод", "manage", "lead"),
-    "qa": ("qa", "тестир", "автотест"),
-    "mobile": ("android", "ios", "react native", "flutter"),
-}
-
-_BENEFIT_PATTERNS: dict[str, tuple[str, ...]] = {
-    "remote": ("удален", "remote"),
-    "hybrid": ("гибрид", "hybrid"),
-    "dms": ("дмс", "медицин", "health insurance"),
-    "education": ("обучен", "курсы", "сертифик", "конференц"),
-    "bonus": ("преми", "бонус", "kpi"),
-    "equipment": ("ноутбук", "техника", "equipment"),
-    "relocation": ("релокац", "relocation"),
-    "visa": ("visa", "виза"),
-}
+TAG_RE = re.compile(r"<[^>]+>")
+WS_RE = re.compile(r"\s+")
 
 
-def _strip_html(text: str) -> str:
-    plain = re.sub(r"<[^>]+>", " ", text)
-    plain = unescape(plain)
-    plain = re.sub(r"\s+", " ", plain)
-    return plain.strip()
+def _clean_text(value: str | None) -> str:
+    if not value:
+        return ""
+    text = html.unescape(value)
+    text = TAG_RE.sub(" ", text)
+    return WS_RE.sub(" ", text).strip()
 
 
-def _normalize_text_parts(vacancy: dict) -> tuple[str, str]:
-    title = vacancy.get("title") or ""
-    description = vacancy.get("description") or ""
-    requirement = vacancy.get("snippet_requirement") or ""
-    responsibility = vacancy.get("snippet_responsibility") or ""
-    text = " ".join([title, description, requirement, responsibility]).lower()
-    clean = f" {_strip_html(text)} "
-    req_clean = _strip_html(requirement.lower())
-    return clean, req_clean
+def _norm_text(value: str | None) -> str:
+    return _clean_text(value).casefold()
 
 
-def _detect_english_level(text: str) -> str | None:
-    if re.search(r"\bc1\b|\bc2\b|advanced|upper-?intermediate", text):
-        return "C1+"
-    if re.search(r"\bb2\b|intermediate", text):
-        return "B2"
-    if re.search(r"\bb1\b|pre-?intermediate", text):
-        return "B1"
-    if re.search(r"\ba2\b|elementary", text):
-        return "A2"
-    if "англий" in text or "english" in text:
-        return "required_unspecified"
-    return None
-
-
-def _collect_tags(text: str, patterns: dict[str, tuple[str, ...]]) -> list[str]:
-    tags: list[str] = []
-    for tag, variants in patterns.items():
-        if any(variant in text for variant in variants):
-            tags.append(tag)
-    return sorted(tags)
-
-
-def _detect_level_hints(text: str) -> list[str]:
-    hints: set[str] = set()
-    if any(marker in text for marker in ("intern", "стажер", "стажёр", "trainee")):
-        hints.add("intern")
-    if any(marker in text for marker in ("junior", "джуниор", "младш")):
-        hints.add("junior")
-    if any(marker in text for marker in ("middle", "мидл", "средн")):
-        hints.add("middle")
-    if any(marker in text for marker in ("senior", "сеньор", "старш")):
-        hints.add("senior")
-    if any(marker in text for marker in ("lead", "тимлид", "team lead", "руковод")):
-        hints.add("lead")
-    return sorted(hints)
-
-
-def _normalize_skills(text: str, skills: list[str]) -> list[str]:
-    skill_set: set[str] = set()
-    for canonical, variants in _SKILL_PATTERNS.items():
-        if any(variant in text for variant in variants):
-            skill_set.add(canonical)
-
-    for raw_skill in skills:
-        name = raw_skill.strip()
-        if not name:
+def _uniq(items: Iterable[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in items:
+        normalized = item.strip()
+        if not normalized or normalized in seen:
             continue
-        lowered = f" {name.lower()} "
-        matched = False
-        for canonical, variants in _SKILL_PATTERNS.items():
-            if any(variant in lowered for variant in variants):
-                skill_set.add(canonical)
-                matched = True
-                break
-        if not matched:
-            skill_set.add(name)
-    return sorted(skill_set)
+        seen.add(normalized)
+        result.append(normalized)
+    return result
 
 
-def build_enrichment(vacancy: dict, skills: list[str] | None = None) -> dict:
-    skill_names = skills or []
-    full_text, requirement_text = _normalize_text_parts(vacancy)
+SKILL_PATTERNS: dict[str, tuple[re.Pattern[str], ...]] = {
+    "python": (re.compile(r"\bpython\b"),),
+    "java": (re.compile(r"\bjava\b"),),
+    "kotlin": (re.compile(r"\bkotlin\b"),),
+    "javascript": (re.compile(r"\bjavascript\b"),),
+    "typescript": (re.compile(r"\btypescript\b"),),
+    "go": (re.compile(r"\bgolang\b"),),
+    "php": (re.compile(r"\bphp\b"),),
+    "c#": (re.compile(r"(?<!\w)c#(?!\w)"), re.compile(r"\bcsharp\b")),
+    ".net": (re.compile(r"(?<!\w)\.net\b"), re.compile(r"\bdotnet\b"), re.compile(r"\basp\.net\b")),
+    "c++": (re.compile(r"(?<!\w)c\+\+(?!\w)"),),
+    "sql": (re.compile(r"\bsql\b"), re.compile(r"\bpostgres(?:ql)?\b"), re.compile(r"\bmysql\b")),
+    "django": (re.compile(r"\bdjango\b"),),
+    "flask": (re.compile(r"\bflask\b"),),
+    "fastapi": (re.compile(r"\bfastapi\b"),),
+    "spring": (re.compile(r"\bspring\b"), re.compile(r"\bspring boot\b")),
+    "react": (re.compile(r"\breact\b"),),
+    "vue": (re.compile(r"\bvue(?:\.js)?\b"),),
+    "angular": (re.compile(r"\bangular\b"),),
+    "node.js": (re.compile(r"\bnode(?:\.js| js)?\b"),),
+    "nestjs": (re.compile(r"\bnest(?:\.js| js)?\b"), re.compile(r"\bnestjs\b")),
+    "docker": (re.compile(r"\bdocker\b"),),
+    "kubernetes": (re.compile(r"\bkubernetes\b"), re.compile(r"\bk8s\b")),
+    "terraform": (re.compile(r"\bterraform\b"),),
+    "aws": (re.compile(r"\baws\b"), re.compile(r"\bamazon web services\b")),
+    "git": (re.compile(r"\bgit\b"),),
+    "linux": (re.compile(r"\blinux\b"),),
+    "spark": (re.compile(r"\bspark\b"), re.compile(r"\bpyspark\b")),
+    "hadoop": (re.compile(r"\bhadoop\b"),),
+    "airflow": (re.compile(r"\bairflow\b"),),
+    "power bi": (re.compile(r"\bpower bi\b"),),
+    "tableau": (re.compile(r"\btableau\b"),),
+    "excel": (re.compile(r"\bexcel\b"),),
+    "etl": (re.compile(r"\betl\b"),),
+    "ml": (re.compile(r"\bml\b"), re.compile(r"\bmachine learning\b")),
+    "data science": (re.compile(r"\bdata science\b"), re.compile(r"\bdata scientist\b")),
+    "nlp": (re.compile(r"\bnlp\b"), re.compile(r"\bnatural language processing\b")),
+    "computer vision": (re.compile(r"\bcomputer vision\b"),),
+}
+
+EXPLICIT_SKILL_ALIASES: dict[str, str] = {
+    "python": "python",
+    "java": "java",
+    "kotlin": "kotlin",
+    "javascript": "javascript",
+    "js": "javascript",
+    "typescript": "typescript",
+    "ts": "typescript",
+    "go": "go",
+    "golang": "go",
+    "php": "php",
+    "c#": "c#",
+    "csharp": "c#",
+    ".net": ".net",
+    "dotnet": ".net",
+    "asp.net": ".net",
+    "c++": "c++",
+    "sql": "sql",
+    "postgresql": "sql",
+    "postgres": "sql",
+    "mysql": "sql",
+    "django": "django",
+    "flask": "flask",
+    "fastapi": "fastapi",
+    "spring": "spring",
+    "spring boot": "spring",
+    "react": "react",
+    "vue": "vue",
+    "angular": "angular",
+    "node.js": "node.js",
+    "node js": "node.js",
+    "nestjs": "nestjs",
+    "docker": "docker",
+    "kubernetes": "kubernetes",
+    "k8s": "kubernetes",
+    "terraform": "terraform",
+    "aws": "aws",
+    "git": "git",
+    "linux": "linux",
+    "spark": "spark",
+    "pyspark": "spark",
+    "hadoop": "hadoop",
+    "airflow": "airflow",
+    "power bi": "power bi",
+    "tableau": "tableau",
+    "excel": "excel",
+    "etl": "etl",
+    "ml": "ml",
+    "machine learning": "ml",
+    "data science": "data science",
+    "data scientist": "data science",
+    "nlp": "nlp",
+    "computer vision": "computer vision",
+}
+
+LEVEL_HINT_PATTERNS: dict[str, tuple[re.Pattern[str], ...]] = {
+    "intern": (
+        re.compile(r"\bintern\b"),
+        re.compile(r"\b\u0441\u0442\u0430\u0436[\u0435\u0451]\u0440\b"),
+    ),
+    "junior": (
+        re.compile(r"\bjunior\b"),
+        re.compile(r"\b\u043c\u043b\u0430\u0434\u0448"),
+    ),
+    "middle": (re.compile(r"\bmiddle\b"), re.compile(r"\bmid\b")),
+    "senior": (
+        re.compile(r"\bsenior\b"),
+        re.compile(r"\b\u0441\u0442\u0430\u0440\u0448"),
+    ),
+    "lead": (re.compile(r"\blead\b"), re.compile(r"\bteam lead\b"), re.compile(r"\btech lead\b")),
+}
+
+ENGLISH_LEVEL_PATTERNS: tuple[tuple[str, tuple[re.Pattern[str], ...]], ...] = (
+    ("c1", (re.compile(r"\bc1\b"), re.compile(r"\badvanced\b"))),
+    ("b2", (re.compile(r"\bb2\b"), re.compile(r"\bupper[- ]intermediate\b"))),
+    ("b1", (re.compile(r"\bb1\b"), re.compile(r"\bintermediate\b"))),
+    ("a2", (re.compile(r"\ba2\b"), re.compile(r"\bpre[- ]intermediate\b"))),
+)
+
+RESPONSIBILITY_PATTERNS: dict[str, tuple[re.Pattern[str], ...]] = {
+    "backend": (
+        re.compile(r"\bbackend\b"),
+        re.compile(r"\b\u0431\u044d?\u043a\u0435\u043d\u0434\b"),
+    ),
+    "frontend": (
+        re.compile(r"\bfront[- ]end\b"),
+        re.compile(r"\bfrontend\b"),
+        re.compile(r"\b\u0444\u0440\u043e\u043d\u0442\u0435\u043d\u0434\b"),
+    ),
+    "mobile": (re.compile(r"\bmobile\b"), re.compile(r"\bandroid\b"), re.compile(r"\bios\b")),
+    "analytics": (
+        re.compile(r"\banalytics?\b"),
+        re.compile(r"\b\u0430\u043d\u0430\u043b\u0438\u0442"),
+        re.compile(r"\bbi\b"),
+    ),
+    "data_engineering": (
+        re.compile(r"\bdata engineer(?:ing)?\b"),
+        re.compile(r"\betl\b"),
+        re.compile(r"\bdata pipeline"),
+        re.compile(r"\bdata warehouse\b"),
+    ),
+    "ml": (re.compile(r"\bml\b"), re.compile(r"\bmachine learning\b"), re.compile(r"\bdata scientist\b")),
+    "qa": (re.compile(r"\bqa\b"), re.compile(r"\btesting\b"), re.compile(r"\b\u0442\u0435\u0441\u0442\u0438\u0440")),
+    "devops": (re.compile(r"\bdevops\b"), re.compile(r"\bsre\b"), re.compile(r"\bplatform engineer\b")),
+    "management": (re.compile(r"\bproduct manager\b"), re.compile(r"\bproject manager\b"), re.compile(r"\bteam lead\b")),
+}
+
+BENEFIT_PATTERNS: dict[str, tuple[re.Pattern[str], ...]] = {
+    "remote": (re.compile(r"\bremote\b"), re.compile(r"\b\u0443\u0434\u0430\u043b\u0435\u043d")),
+    "hybrid": (re.compile(r"\bhybrid\b"), re.compile(r"\b\u0433\u0438\u0431\u0440\u0438\u0434")),
+    "dms": (
+        re.compile(r"\b\u0434\u043c\u0441\b"),
+        re.compile(r"\bmedical insurance\b"),
+        re.compile(r"\bhealth insurance\b"),
+    ),
+    "bonus": (re.compile(r"\bbonus"), re.compile(r"\b\u0431\u043e\u043d\u0443\u0441"), re.compile(r"\bpremium\b")),
+    "equipment": (
+        re.compile(r"\bequipment\b"),
+        re.compile(r"\b\u043d\u043e\u0443\u0442\u0431\u0443\u043a\b"),
+        re.compile(r"\blaptop\b"),
+    ),
+    "visa": (re.compile(r"\bvisa\b"), re.compile(r"\brelocation\b"), re.compile(r"\b\u0440\u0435\u043b\u043e\u043a\u0430\u0446")),
+}
+
+
+def _extract_from_patterns(
+    text: str,
+    patterns: dict[str, tuple[re.Pattern[str], ...]],
+) -> list[str]:
+    matched: list[str] = []
+    for label, pattern_list in patterns.items():
+        if any(pattern.search(text) for pattern in pattern_list):
+            matched.append(label)
+    return _uniq(sorted(matched))
+
+
+def _extract_explicit_skills(skills: list[str]) -> list[str]:
+    normalized: list[str] = []
+    for skill in skills:
+        key = _norm_text(skill)
+        if not key:
+            continue
+        alias = EXPLICIT_SKILL_ALIASES.get(key)
+        normalized.append(alias or _clean_text(skill))
+    return _uniq(sorted(normalized))
+
+
+def _extract_hard_skills(text: str, explicit_skills: list[str]) -> list[str]:
+    found = list(explicit_skills)
+    for skill, patterns in SKILL_PATTERNS.items():
+        if any(pattern.search(text) for pattern in patterns):
+            found.append(skill)
+    return _uniq(sorted(found))
+
+
+def _extract_english_level(text: str) -> str | None:
+    if not re.search(r"\benglish\b|\b\u0430\u043d\u0433\u043b\u0438\u0439", text):
+        return None
+    for level, patterns in ENGLISH_LEVEL_PATTERNS:
+        if any(pattern.search(text) for pattern in patterns):
+            return level
+    return "required"
+
+
+def build_enrichment(vacancy: dict, skills: list[str]) -> dict[str, object]:
+    title = _clean_text(vacancy.get("title"))
+    requirement = _clean_text(vacancy.get("snippet_requirement"))
+    responsibility = _clean_text(vacancy.get("snippet_responsibility"))
+    description = _clean_text(vacancy.get("description"))
+
+    searchable_text = _norm_text(
+        " ".join(part for part in (title, requirement, responsibility, description) if part)
+    )
+    explicit_skills = _extract_explicit_skills(skills)
 
     return {
-        "hard_skills_norm": _normalize_skills(full_text, skill_names),
-        "level_hints": _detect_level_hints(full_text),
-        "english_level": _detect_english_level(full_text),
-        "responsibility_tags": _collect_tags(full_text, _RESPONSIBILITY_PATTERNS),
-        "benefit_tags": _collect_tags(full_text, _BENEFIT_PATTERNS),
-        "description_len": len(_strip_html(vacancy.get("description") or "")),
-        "requirements_len": len(requirement_text),
+        "hard_skills_norm": _extract_hard_skills(searchable_text, explicit_skills),
+        "level_hints": _extract_from_patterns(searchable_text, LEVEL_HINT_PATTERNS),
+        "english_level": _extract_english_level(searchable_text),
+        "responsibility_tags": _extract_from_patterns(searchable_text, RESPONSIBILITY_PATTERNS),
+        "benefit_tags": _extract_from_patterns(searchable_text, BENEFIT_PATTERNS),
+        "description_len": len(description),
+        "requirements_len": len(requirement),
     }

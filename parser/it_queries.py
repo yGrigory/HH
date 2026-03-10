@@ -15,7 +15,7 @@ IT_QUERY_GROUPS: dict[str, list[str]] = {
     "backend_general": [
         "backend developer",
         "backend разработчик",
-        "бекенд разработчик",
+        "бэкенд разработчик",
         "software engineer backend",
         "java developer",
         "java разработчик",
@@ -46,7 +46,6 @@ IT_QUERY_GROUPS: dict[str, list[str]] = {
         "react разработчик",
         "vue developer",
         "angular developer",
-        "web developer",
     ],
     "fullstack_mobile": [
         "fullstack developer",
@@ -70,8 +69,8 @@ IT_QUERY_GROUPS: dict[str, list[str]] = {
         "системный аналитик",
         "sql developer",
         "bi analyst",
-        "power bi",
-        "tableau",
+        "power bi developer",
+        "tableau developer",
         "data engineer",
         "инженер данных",
         "etl developer",
