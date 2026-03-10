@@ -6,7 +6,12 @@ from dataclasses import dataclass
 from requests import HTTPError
 
 from .hh_client import HHClient
-from .repository import finish_parse_run, save_vacancy_with_skills, start_parse_run
+from .repository import (
+    finish_parse_run,
+    get_existing_vacancy_hh_ids,
+    save_vacancy_with_skills,
+    start_parse_run,
+)
 from .transform import build_vacancy, normalize_skills
 
 
@@ -16,6 +21,7 @@ class LoadStats:
     vacancies_seen: int = 0
     vacancies_saved: int = 0
     vacancies_failed: int = 0
+    vacancies_skipped_existing: int = 0
     parse_run_id: int | None = None
 
 
@@ -28,9 +34,12 @@ def load_vacancies(
     per_page: int,
     only_with_salary: bool,
     date_from: str | None = None,
+    date_to: str | None = None,
+    order_by: str | None = "publication_time",
     max_vacancies_per_query: int | None = None,
     cooldown_403_threshold: int = 5,
     cooldown_403_sec: float = 90.0,
+    skip_existing: bool = True,
 ) -> LoadStats:
     stats = LoadStats()
     errors_shown = 0
@@ -58,12 +67,27 @@ def load_vacancies(
                 per_page=per_page,
                 only_with_salary=only_with_salary,
                 date_from=date_from,
+                date_to=date_to,
+                order_by=order_by,
             )
             items = payload.get("items", [])
             if not items:
                 break
 
             stats.pages_scanned += 1
+            existing_ids: set[int] = set()
+            if skip_existing:
+                page_ids: list[int] = []
+                for item in items:
+                    vacancy_id = item.get("id")
+                    if not vacancy_id:
+                        continue
+                    try:
+                        page_ids.append(int(vacancy_id))
+                    except (TypeError, ValueError):
+                        continue
+                existing_ids = get_existing_vacancy_hh_ids(conn, page_ids)
+
             for item in items:
                 if target_saved is not None and stats.vacancies_saved >= target_saved:
                     break
@@ -72,9 +96,18 @@ def load_vacancies(
                 if not vacancy_id:
                     stats.vacancies_failed += 1
                     continue
+                try:
+                    vacancy_id_int = int(vacancy_id)
+                except (TypeError, ValueError):
+                    stats.vacancies_failed += 1
+                    continue
+
+                if vacancy_id_int in existing_ids:
+                    stats.vacancies_skipped_existing += 1
+                    continue
 
                 try:
-                    details = hh_client.get_vacancy(vacancy_id)
+                    details = hh_client.get_vacancy(vacancy_id_int)
                     vacancy = build_vacancy(details, query=query)
                     skills = normalize_skills(details)
                     save_vacancy_with_skills(conn, vacancy, skills)

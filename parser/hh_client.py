@@ -75,6 +75,8 @@ class HHClient:
         per_page: int,
         only_with_salary: bool,
         date_from: str | None = None,
+        date_to: str | None = None,
+        order_by: str | None = None,
     ) -> dict[str, Any]:
         params = {
             "text": query,
@@ -85,6 +87,10 @@ class HHClient:
         }
         if date_from:
             params["date_from"] = date_from
+        if date_to:
+            params["date_to"] = date_to
+        if order_by:
+            params["order_by"] = order_by
         url = f"{self._settings.hh_base_url}/vacancies"
         return self._request_json(url, params=params)
 

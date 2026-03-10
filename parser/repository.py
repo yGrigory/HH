@@ -111,6 +111,43 @@ def finish_parse_run(
         )
 
 
+def get_last_successful_run_finished_at(
+    conn: PgConnection,
+    query: str,
+    area: int,
+    only_with_salary: bool,
+) -> datetime | None:
+    sql = """
+    SELECT finished_at
+    FROM parse_runs
+    WHERE status = 'success'
+      AND query = %s
+      AND area = %s
+      AND only_with_salary = %s
+      AND finished_at IS NOT NULL
+    ORDER BY finished_at DESC
+    LIMIT 1;
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (query, area, only_with_salary))
+        row = cur.fetchone()
+        return row[0] if row else None
+
+
+def get_existing_vacancy_hh_ids(conn: PgConnection, hh_ids: list[int]) -> set[int]:
+    if not hh_ids:
+        return set()
+
+    sql = """
+    SELECT hh_id
+    FROM vacancies
+    WHERE hh_id = ANY(%s);
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (hh_ids,))
+        return {int(row[0]) for row in cur.fetchall()}
+
+
 def upsert_vacancy(conn: PgConnection, vacancy: dict) -> int:
     payload = dict(vacancy)
     payload["raw_json"] = Json(vacancy["raw_json"])
