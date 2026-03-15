@@ -137,11 +137,40 @@ class HHClient:
             if "order_by" in fallback_params:
                 fallback_params.pop("order_by", None)
                 removed.append("order_by")
-                print(
-                    "[HH WARN] 400 persists; retry without order_by "
-                    f"query='{query}' page={page}"
-                )
-                return self._request_json(url, params=fallback_params)
+                try:
+                    print(
+                        "[HH WARN] 400 persists; retry without order_by "
+                        f"query='{query}' page={page}"
+                    )
+                    return self._request_json(url, params=fallback_params)
+                except HTTPError as retry_exc:
+                    retry_status = (
+                        retry_exc.response.status_code
+                        if retry_exc.response is not None
+                        else None
+                    )
+                    if retry_status != 400:
+                        raise
+                    exc = retry_exc
+
+            if "search_field" in fallback_params:
+                fallback_params.pop("search_field", None)
+                removed.append("search_field")
+                try:
+                    print(
+                        "[HH WARN] 400 persists; retry without search_field "
+                        f"query='{query}' page={page}"
+                    )
+                    return self._request_json(url, params=fallback_params)
+                except HTTPError as retry_exc:
+                    retry_status = (
+                        retry_exc.response.status_code
+                        if retry_exc.response is not None
+                        else None
+                    )
+                    if retry_status != 400:
+                        raise
+                    exc = retry_exc
 
             response_text = ""
             if exc.response is not None:
