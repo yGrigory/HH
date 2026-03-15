@@ -15,10 +15,11 @@ class HHClient:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._session = requests.Session()
-        self._user_agent_fallback_applied = False
+        self._user_agent_candidates = self._build_user_agent_candidates(settings.hh_user_agent)
+        self._user_agent_index = 0
         self._session.headers.update(
             {
-                "User-Agent": settings.hh_user_agent,
+                "User-Agent": self._user_agent_candidates[self._user_agent_index],
                 "Accept": "application/json",
             }
         )
@@ -72,19 +73,55 @@ class HHClient:
             raise last_exc
         raise RuntimeError("HH request failed unexpectedly without exception")
 
+    @staticmethod
+    def _build_user_agent_candidates(primary: str) -> list[str]:
+        contact_email = os.getenv("HH_CONTACT_EMAIL", "").strip()
+        primary_clean = primary.strip()
+        candidates = [primary_clean] if primary_clean else []
+
+        if contact_email:
+            candidates.append(f"SalaryAnalyzerBot/1.0 ({contact_email})")
+            candidates.append(f"hh-api-client ({contact_email})")
+        else:
+            candidates.append("SalaryAnalyzerBot/1.0 (contact: user@example.com)")
+            candidates.append("hh-api-client (contact: user@example.com)")
+
+        fallback_from_env = os.getenv("HH_FALLBACK_USER_AGENT", "").strip()
+        if fallback_from_env:
+            candidates.append(fallback_from_env)
+
+        # Keep one browser-like fallback as last resort.
+        candidates.append(
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+        )
+
+        unique: list[str] = []
+        seen: set[str] = set()
+        for item in candidates:
+            if not item:
+                continue
+            key = item.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(item)
+        return unique or ["hh-api-client (contact: user@example.com)"]
+
     def _maybe_switch_user_agent(self, resp: Response) -> bool:
-        if self._user_agent_fallback_applied:
-            return False
         if not self._is_bad_user_agent_response(resp):
             return False
 
-        fallback_user_agent = os.getenv(
-            "HH_FALLBACK_USER_AGENT",
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+        next_index = self._user_agent_index + 1
+        if next_index >= len(self._user_agent_candidates):
+            return False
+
+        self._user_agent_index = next_index
+        next_user_agent = self._user_agent_candidates[self._user_agent_index]
+        self._session.headers["User-Agent"] = next_user_agent
+        print(
+            "[HH WARN] User-Agent was rejected by HH API; switched User-Agent "
+            f"to candidate #{self._user_agent_index + 1} and retrying request."
         )
-        self._session.headers["User-Agent"] = fallback_user_agent
-        self._user_agent_fallback_applied = True
-        print("[HH WARN] User-Agent was rejected by HH API; switched to fallback User-Agent and retrying request.")
         return True
 
     @staticmethod
