@@ -55,7 +55,7 @@ def get_settings() -> Settings:
         db_port=int(os.getenv("DB_PORT", "5432")),
         db_sslmode=os.getenv("DB_SSLMODE", "require"),
         hh_base_url=os.getenv("HH_BASE_URL", "https://api.hh.ru"),
-        hh_user_agent=os.getenv("HH_USER_AGENT", "HHParserBot/2.0"),
+        hh_user_agent=os.getenv("HH_USER_AGENT", "SalaryAnalyzerBot/1.0 (+https://github.com/yGrigory/HH)"),
         hh_timeout_sec=int(os.getenv("HH_TIMEOUT_SEC", "20")),
         hh_sleep_between_requests_sec=float(
             os.getenv("HH_SLEEP_BETWEEN_REQUESTS_SEC", "1.0")

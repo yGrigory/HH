@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import time
 import re
 from typing import Any
@@ -14,6 +15,7 @@ class HHClient:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._session = requests.Session()
+        self._user_agent_fallback_applied = False
         self._session.headers.update(
             {
                 "User-Agent": settings.hh_user_agent,
@@ -47,6 +49,8 @@ class HHClient:
                 self._last_request_ts = time.monotonic()
                 last_exc = exc
                 status = resp.status_code if resp is not None else None
+                if status == 400 and resp is not None and self._maybe_switch_user_agent(resp):
+                    continue
                 if status not in {403, 429, 500, 502, 503, 504} or attempt == attempts:
                     raise
                 retry_after = resp.headers.get("Retry-After") if resp is not None else None
@@ -67,6 +71,46 @@ class HHClient:
         if last_exc is not None:
             raise last_exc
         raise RuntimeError("HH request failed unexpectedly without exception")
+
+    def _maybe_switch_user_agent(self, resp: Response) -> bool:
+        if self._user_agent_fallback_applied:
+            return False
+        if not self._is_bad_user_agent_response(resp):
+            return False
+
+        fallback_user_agent = os.getenv(
+            "HH_FALLBACK_USER_AGENT",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+        )
+        self._session.headers["User-Agent"] = fallback_user_agent
+        self._user_agent_fallback_applied = True
+        print("[HH WARN] User-Agent was rejected by HH API; switched to fallback User-Agent and retrying request.")
+        return True
+
+    @staticmethod
+    def _is_bad_user_agent_response(resp: Response) -> bool:
+        text = (resp.text or "").lower()
+        if "bad user-agent" in text or "bad_user_agent" in text or "blacklisted" in text:
+            return True
+        try:
+            payload = resp.json()
+        except ValueError:
+            return False
+
+        if isinstance(payload, dict):
+            description = str(payload.get("description", "")).lower()
+            if "bad user-agent" in description:
+                return True
+            errors = payload.get("errors")
+            if isinstance(errors, list):
+                for item in errors:
+                    if not isinstance(item, dict):
+                        continue
+                    error_type = str(item.get("type", "")).lower()
+                    value = str(item.get("value", "")).lower()
+                    if error_type == "bad_user_agent" or value == "blacklisted":
+                        return True
+        return False
 
     @staticmethod
     def _normalize_hh_datetime(value: str) -> str:
