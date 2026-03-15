@@ -92,9 +92,11 @@ class HHClient:
             "area": area,
             "page": page,
             "per_page": per_page,
-            "only_with_salary": only_with_salary,
             "search_field": "name",
         }
+        # HH API is picky about boolean query params. Send only explicit "true".
+        if only_with_salary:
+            params["only_with_salary"] = "true"
         if date_from:
             params["date_from"] = self._normalize_hh_datetime(date_from)
         if date_to:
