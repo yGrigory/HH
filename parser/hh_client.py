@@ -87,11 +87,12 @@ class HHClient:
         date_to: str | None = None,
         order_by: str | None = None,
     ) -> dict[str, Any]:
+        safe_per_page = max(1, min(50, int(per_page)))
         params: dict[str, Any] = {
             "text": query,
             "area": area,
             "page": page,
-            "per_page": per_page,
+            "per_page": safe_per_page,
             "search_field": "name",
         }
         # HH API is picky about boolean query params. Send only explicit "true".
@@ -159,6 +160,25 @@ class HHClient:
                 try:
                     print(
                         "[HH WARN] 400 persists; retry without search_field "
+                        f"query='{query}' page={page}"
+                    )
+                    return self._request_json(url, params=fallback_params)
+                except HTTPError as retry_exc:
+                    retry_status = (
+                        retry_exc.response.status_code
+                        if retry_exc.response is not None
+                        else None
+                    )
+                    if retry_status != 400:
+                        raise
+                    exc = retry_exc
+
+            if int(fallback_params.get("per_page", 0) or 0) > 20:
+                fallback_params["per_page"] = 20
+                removed.append("per_page->20")
+                try:
+                    print(
+                        "[HH WARN] 400 persists; retry with per_page=20 "
                         f"query='{query}' page={page}"
                     )
                     return self._request_json(url, params=fallback_params)
