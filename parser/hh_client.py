@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+import re
 from typing import Any
 
 import requests
@@ -67,6 +68,14 @@ class HHClient:
             raise last_exc
         raise RuntimeError("HH request failed unexpectedly without exception")
 
+    @staticmethod
+    def _normalize_hh_datetime(value: str) -> str:
+        normalized = value.strip()
+        # HH API expects timezone like +0000 (without colon and without offset seconds).
+        normalized = re.sub(r"([+-]\d{2}):(\d{2}):\d{2}$", r"\1\2", normalized)
+        normalized = re.sub(r"([+-]\d{2}):(\d{2})$", r"\1\2", normalized)
+        return normalized
+
     def search_vacancies(
         self,
         query: str,
@@ -87,9 +96,9 @@ class HHClient:
             "search_field": "name",
         }
         if date_from:
-            params["date_from"] = date_from
+            params["date_from"] = self._normalize_hh_datetime(date_from)
         if date_to:
-            params["date_to"] = date_to
+            params["date_to"] = self._normalize_hh_datetime(date_to)
         if order_by:
             params["order_by"] = order_by
         url = f"{self._settings.hh_base_url}/vacancies"

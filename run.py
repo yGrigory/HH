@@ -19,6 +19,11 @@ def _now_utc() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def _format_hh_datetime(value: datetime) -> str:
+    # HH API is strict about datetime format; always send UTC without offset seconds.
+    return value.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S%z")
+
+
 def _parse_bool(value: str | None, default: bool = False) -> bool:
     if value is None:
         return default
@@ -193,8 +198,8 @@ def main() -> None:
                             pages=pages,
                             per_page=per_page,
                             only_with_salary=only_with_salary,
-                            date_from=date_from.isoformat(timespec="seconds"),
-                            date_to=date_to.isoformat(timespec="seconds"),
+                            date_from=_format_hh_datetime(date_from),
+                            date_to=_format_hh_datetime(date_to),
                             order_by="publication_time",
                             max_vacancies_per_query=remaining_target,
                             cooldown_403_threshold=settings.hh_403_cooldown_threshold,
