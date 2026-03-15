@@ -8,6 +8,7 @@ from psycopg2.extensions import connection as PgConnection
 from psycopg2.extras import Json
 
 from .enrichment import build_enrichment
+from .it_queries import is_valid_skill_query, normalize_skill_query
 
 FX_RATES_URL = "https://www.cbr-xml-daily.ru/daily_json.js"
 
@@ -336,3 +337,41 @@ def save_vacancy_with_skills(conn: PgConnection, vacancy: dict, skills: list[str
         link_vacancy_skill(conn, vacancy_id, skill_id)
     upsert_vacancy_enrichment(conn, vacancy_id, vacancy, skills)
     return vacancy_id
+
+
+def get_skill_queries(
+    conn: PgConnection,
+    min_count: int = 1,
+    limit: int | None = None,
+) -> list[str]:
+    sql = """
+    SELECT s.name, COUNT(*)::int AS cnt
+    FROM vacancy_skills vs
+    JOIN skills s ON s.id = vs.skill_id
+    GROUP BY s.name
+    HAVING COUNT(*) >= %s
+    ORDER BY cnt DESC, s.name ASC
+    """
+    params: list[object] = [max(1, min_count)]
+    if limit is not None and limit > 0:
+        sql += " LIMIT %s"
+        params.append(limit)
+
+    with conn.cursor() as cur:
+        cur.execute(sql, params)
+        rows = cur.fetchall()
+
+    queries: list[str] = []
+    seen: set[str] = set()
+    for skill_name, _ in rows:
+        if not skill_name:
+            continue
+        query = normalize_skill_query(str(skill_name))
+        if not is_valid_skill_query(query):
+            continue
+        key = query.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        queries.append(query)
+    return queries
