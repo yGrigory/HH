@@ -87,7 +87,7 @@ class HHClient:
         date_to: str | None = None,
         order_by: str | None = None,
     ) -> dict[str, Any]:
-        params = {
+        params: dict[str, Any] = {
             "text": query,
             "area": area,
             "page": page,
@@ -104,7 +104,55 @@ class HHClient:
         if order_by:
             params["order_by"] = order_by
         url = f"{self._settings.hh_base_url}/vacancies"
-        return self._request_json(url, params=params)
+        try:
+            return self._request_json(url, params=params)
+        except HTTPError as exc:
+            status_code = exc.response.status_code if exc.response is not None else None
+            if status_code != 400:
+                raise
+
+            fallback_params = dict(params)
+            removed: list[str] = []
+
+            if "date_from" in fallback_params or "date_to" in fallback_params:
+                fallback_params.pop("date_from", None)
+                fallback_params.pop("date_to", None)
+                removed.extend(["date_from", "date_to"])
+                try:
+                    print(
+                        "[HH WARN] 400 on search_vacancies; retry without date filters "
+                        f"query='{query}' page={page}"
+                    )
+                    return self._request_json(url, params=fallback_params)
+                except HTTPError as retry_exc:
+                    retry_status = (
+                        retry_exc.response.status_code
+                        if retry_exc.response is not None
+                        else None
+                    )
+                    if retry_status != 400:
+                        raise
+                    exc = retry_exc
+
+            if "order_by" in fallback_params:
+                fallback_params.pop("order_by", None)
+                removed.append("order_by")
+                print(
+                    "[HH WARN] 400 persists; retry without order_by "
+                    f"query='{query}' page={page}"
+                )
+                return self._request_json(url, params=fallback_params)
+
+            response_text = ""
+            if exc.response is not None:
+                response_text = (exc.response.text or "").strip().replace("\n", " ")
+                if len(response_text) > 300:
+                    response_text = response_text[:300] + "..."
+            print(
+                "[HH ERROR] 400 for search_vacancies with params "
+                f"query='{query}' page={page} removed={removed} response='{response_text}'"
+            )
+            raise
 
     def get_vacancy(self, vacancy_id: str | int) -> dict[str, Any]:
         url = f"{self._settings.hh_base_url}/vacancies/{vacancy_id}"
