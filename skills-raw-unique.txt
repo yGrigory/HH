@@ -1,0 +1,135 @@
+﻿.NET
+1C
+A/B Testing
+AI
+Airflow
+Allure
+amoCRM API
+Android
+Angular
+Ansi C++
+Ansible
+Anthropic Claude
+Apache Airflow
+API
+Arduino
+ASP.NET
+Azure
+Bash
+Bitrix
+C
+Excel
+Word
+Power Point
+C#
+C++
+Cassandra
+Celery
+CI/CD
+Clickhouse
+Cloud
+CSS
+CV
+Dart
+Django
+Docker
+Elasticsearch
+Elixir
+Embedded
+Erlang
+F#
+FastAPI
+Flask
+Flutter
+Gemini
+Git
+Golang
+Grafana
+GraphQL
+Greenplum
+gRPC
+HTML
+HTTP
+iOS
+Java
+JavaScript
+jQuery
+JSON
+K8s
+Kafka
+Keras
+Kernel
+Kotlin
+Kubeflow
+Kubernetes
+Laravel
+Linux
+LLM
+Lua
+ML
+Mobx
+MongoDB
+MSSQL
+NextJS
+Nginx
+NLP
+Node.js
+Objective-C
+OpenAI
+ORACLE
+Phoenix
+PHP
+Pixi.JS
+playwright
+PostgreSQL
+Postman
+PowerShell
+Prometheus
+Proxmox
+Pytest
+Python
+PyTorch
+QA
+Quarkus
+RabbitMQ
+RAG
+React
+Redis
+Redux
+REST API
+Ruby
+Rust
+Scala
+SCSS
+Selenium
+Shell
+Snowflake
+SOAP
+SOLID
+Solidity
+Spark
+SPI
+Spring
+SQL
+Swagger
+Swift
+Symfony
+System Design
+Tailwind
+TDD
+Telegram API
+TensorFlow
+Terraform
+TypeScript
+Unit Testing
+Unity
+OpenGL
+DirectX
+Unix
+Vue
+Web API
+websocket
+Windows API
+XML
+YAML
+matplotlib
