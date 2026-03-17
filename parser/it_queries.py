@@ -41,6 +41,24 @@ def _looks_like_role_query(value: str) -> bool:
     return any(pattern.search(value) for pattern in ROLE_PATTERNS)
 
 
+def normalize_skill_query(value: str) -> str:
+    # Backward-compatible helper used by repository.py
+    return _clean_query(value)
+
+
+def is_valid_skill_query(value: str) -> bool:
+    query = _clean_query(value)
+    if not query:
+        return False
+    if len(query) < 2:
+        return False
+    if query.isdigit():
+        return False
+    if _looks_like_role_query(query):
+        return False
+    return True
+
+
 def normalize_technology_queries(items: list[str]) -> list[str]:
     queries: list[str] = []
     seen: set[str] = set()
