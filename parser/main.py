@@ -1,19 +1,26 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 from psycopg2 import OperationalError
 
 from .config import get_settings
 from .db import connection_scope
 from .hh_client import HHClient
+from .it_queries import load_technology_queries_from_file
 from .pipeline import load_vacancies
 from .schema import create_schema, recreate_schema
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="HH vacancies parser to PostgreSQL")
-    parser.add_argument("--query", default="data analyst", help="Search text for HH API")
+    parser.add_argument("--query", default="", help="Single technology query for HH API")
+    parser.add_argument(
+        "--queries-file",
+        default="",
+        help="Path to technologies file (one skill per line).",
+    )
     parser.add_argument("--area", type=int, default=113, help="HH area id (113 = Russia)")
     parser.add_argument("--pages", type=int, default=3, help="Pages to fetch")
     parser.add_argument("--per-page", type=int, default=20, help="Items per page")
@@ -35,6 +42,26 @@ def run() -> None:
     settings = get_settings()
     client = HHClient(settings)
 
+    if args.query.strip():
+        queries = [args.query.strip()]
+    else:
+        if args.queries_file.strip():
+            queries_file = Path(args.queries_file.strip())
+        else:
+            root = Path(__file__).resolve().parents[2]
+            preferred = root / "skills-row-unique.txt"
+            if preferred.exists():
+                queries_file = preferred
+            else:
+                queries_file = root / "skills-raw-unique.txt"
+                if not queries_file.exists():
+                    # support workspace layout where skills are in TGApp sibling folder
+                    queries_file = root / "TGApp" / "skills-raw-unique.txt"
+        queries = load_technology_queries_from_file(queries_file)
+
+    if not queries:
+        raise SystemExit("No technology queries found. Provide --query or a valid --queries-file.")
+
     try:
         with connection_scope(settings) as conn:
             if args.recreate_schema:
@@ -42,17 +69,24 @@ def run() -> None:
             else:
                 create_schema(conn)
 
-            stats = load_vacancies(
-                conn=conn,
-                hh_client=client,
-                query=args.query,
-                area=args.area,
-                pages=args.pages,
-                per_page=args.per_page,
-                only_with_salary=args.with_salary_only,
-                cooldown_403_threshold=settings.hh_403_cooldown_threshold,
-                cooldown_403_sec=settings.hh_403_cooldown_sec,
-            )
+            totals = {"pages_scanned": 0, "vacancies_seen": 0, "vacancies_saved": 0, "vacancies_failed": 0}
+
+            for query in queries:
+                stats = load_vacancies(
+                    conn=conn,
+                    hh_client=client,
+                    query=query,
+                    area=args.area,
+                    pages=args.pages,
+                    per_page=args.per_page,
+                    only_with_salary=args.with_salary_only,
+                    cooldown_403_threshold=settings.hh_403_cooldown_threshold,
+                    cooldown_403_sec=settings.hh_403_cooldown_sec,
+                )
+                totals["pages_scanned"] += stats.pages_scanned
+                totals["vacancies_seen"] += stats.vacancies_seen
+                totals["vacancies_saved"] += stats.vacancies_saved
+                totals["vacancies_failed"] += stats.vacancies_failed
     except OperationalError as exc:
         raise SystemExit(
             "Database connection failed. Check DB_HOST, DB_PORT, DB_NAME, "
@@ -62,10 +96,11 @@ def run() -> None:
 
     print(
         "Done. "
-        f"pages_scanned={stats.pages_scanned}, "
-        f"vacancies_seen={stats.vacancies_seen}, "
-        f"vacancies_saved={stats.vacancies_saved}, "
-        f"vacancies_failed={stats.vacancies_failed}"
+        f"queries={len(queries)}, "
+        f"pages_scanned={totals['pages_scanned']}, "
+        f"vacancies_seen={totals['vacancies_seen']}, "
+        f"vacancies_saved={totals['vacancies_saved']}, "
+        f"vacancies_failed={totals['vacancies_failed']}"
     )
 
 

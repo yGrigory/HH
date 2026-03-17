@@ -3,15 +3,16 @@ from __future__ import annotations
 import os
 import time
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from psycopg2 import OperationalError
 
 from parser.config import get_settings
 from parser.db import connection_scope
 from parser.hh_client import HHClient
-from parser.it_queries import is_valid_skill_query, normalize_skill_query
+from parser.it_queries import DEFAULT_IT_QUERIES, load_technology_queries_from_file, normalize_technology_queries
 from parser.pipeline import LoadStats, load_vacancies
-from parser.repository import get_last_successful_run_finished_at, get_skill_queries
+from parser.repository import get_last_successful_run_finished_at
 from parser.schema import create_schema, recreate_schema
 
 
@@ -20,7 +21,6 @@ def _now_utc() -> str:
 
 
 def _format_hh_datetime(value: datetime) -> str:
-    # HH API is strict about datetime format; always send UTC without offset seconds.
     return value.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S%z")
 
 
@@ -30,48 +30,18 @@ def _parse_bool(value: str | None, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
-def _load_extra_skill_queries() -> list[str]:
-    raw = os.getenv("IT_EXTRA_SKILL_QUERIES", "").strip()
-    if not raw:
-        return []
+def _load_queries() -> list[str]:
+    skills_file = os.getenv("IT_SKILLS_FILE", "").strip()
+    if skills_file:
+        queries = load_technology_queries_from_file(Path(skills_file))
+        if queries:
+            return queries
 
-    unique_queries: list[str] = []
-    seen: set[str] = set()
-    for query in raw.split(","):
-        normalized = normalize_skill_query(query)
-        if not is_valid_skill_query(normalized):
-            continue
-        key = normalized.casefold()
-        if key in seen:
-            continue
-        seen.add(key)
-        unique_queries.append(normalized)
-    return unique_queries
+    raw = os.getenv("IT_QUERIES", "").strip()
+    if raw:
+        return normalize_technology_queries([part.strip() for part in raw.split(",")])
 
-
-def _load_queries_from_db(conn) -> list[str]:
-    include_db_skills = _parse_bool(os.getenv("IT_USE_DB_SKILLS"), True)
-    if not include_db_skills:
-        return []
-    min_count = max(1, int(os.getenv("IT_DB_SKILLS_MIN_COUNT", "1")))
-    limit_raw = int(os.getenv("IT_DB_SKILLS_LIMIT", "0"))
-    limit = limit_raw if limit_raw > 0 else None
-    return get_skill_queries(conn, min_count=min_count, limit=limit)
-
-
-def _merge_queries(seed_queries: list[str], db_queries: list[str]) -> list[str]:
-    merged: list[str] = []
-    seen: set[str] = set()
-    for query in [*seed_queries, *db_queries]:
-        normalized = query.strip()
-        if not normalized:
-            continue
-        key = normalized.casefold()
-        if key in seen:
-            continue
-        seen.add(key)
-        merged.append(normalized)
-    return merged
+    return DEFAULT_IT_QUERIES
 
 
 def _build_backfill_windows(
@@ -157,7 +127,13 @@ def main() -> None:
     skip_existing = _parse_bool(os.getenv("IT_SKIP_EXISTING"), True)
     recreate_on_start = _parse_bool(os.getenv("IT_RECREATE_ON_START"), False)
     run_once = _parse_bool(os.getenv("IT_RUN_ONCE"), False)
-    extra_skill_queries = _load_extra_skill_queries()
+    queries = _load_queries()
+
+    if not queries:
+        raise SystemExit(
+            "No technology queries loaded. Check skills-row-unique.txt / skills-raw-unique.txt "
+            "or provide IT_SKILLS_FILE."
+        )
 
     target_label = "unlimited" if target_per_query is None else str(target_per_query)
     print(
@@ -169,9 +145,6 @@ def main() -> None:
         f"loop_interval_min={interval_minutes}"
     )
 
-    db_skill_queries: list[str] = []
-    queries: list[str] = []
-
     try:
         with connection_scope(settings) as conn:
             if recreate_on_start:
@@ -180,21 +153,8 @@ def main() -> None:
             else:
                 create_schema(conn)
                 print(f"[{_now_utc()}] schema checked/created")
-
-            db_skill_queries = _load_queries_from_db(conn)
-            queries = _merge_queries(db_skill_queries, extra_skill_queries)
     except OperationalError as exc:
         raise SystemExit(f"Database connection failed: {exc}")
-
-    if not queries:
-        raise SystemExit(
-            "No skill queries found. Populate skills table first or set IT_EXTRA_SKILL_QUERIES."
-        )
-
-    print(
-        f"[{_now_utc()}] queries_loaded total={len(queries)} "
-        f"(db_skills={len(db_skill_queries)}, extra={len(extra_skill_queries)})"
-    )
 
     cycle = 0
     while True:
