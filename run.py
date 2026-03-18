@@ -10,7 +10,12 @@ from psycopg2 import OperationalError
 from parser.config import get_settings
 from parser.db import connection_scope
 from parser.hh_client import HHClient
-from parser.it_queries import DEFAULT_IT_QUERIES, load_technology_queries_from_file, normalize_technology_queries
+from parser.it_queries import (
+    DEFAULT_IT_ROLE_QUERIES,
+    load_role_queries_from_file,
+    load_role_queries_from_skills_file,
+    normalize_role_queries,
+)
 from parser.pipeline import LoadStats, load_vacancies
 from parser.repository import get_last_successful_run_finished_at
 from parser.schema import create_schema, recreate_schema
@@ -31,17 +36,27 @@ def _parse_bool(value: str | None, default: bool = False) -> bool:
 
 
 def _load_queries() -> list[str]:
+    # Backward compatible: IT_SKILLS_FILE can point either to a skills list
+    # (to map a subset into role queries) or to a direct role-queries file.
     skills_file = os.getenv("IT_SKILLS_FILE", "").strip()
     if skills_file:
-        queries = load_technology_queries_from_file(Path(skills_file))
+        file_path = Path(skills_file)
+        queries = load_role_queries_from_file(file_path)
+        if not queries:
+            queries = load_role_queries_from_skills_file(file_path)
         if queries:
             return queries
 
+    role_raw = os.getenv("IT_ROLE_QUERIES", "").strip()
+    if role_raw:
+        return normalize_role_queries([part.strip() for part in role_raw.split(",")])
+
+    # Legacy env name kept for smooth deployments.
     raw = os.getenv("IT_QUERIES", "").strip()
     if raw:
-        return normalize_technology_queries([part.strip() for part in raw.split(",")])
+        return normalize_role_queries([part.strip() for part in raw.split(",")])
 
-    return DEFAULT_IT_QUERIES
+    return DEFAULT_IT_ROLE_QUERIES
 
 
 def _build_backfill_windows(
@@ -131,8 +146,8 @@ def main() -> None:
 
     if not queries:
         raise SystemExit(
-            "No technology queries loaded. Check skills-row-unique.txt / skills-raw-unique.txt "
-            "or provide IT_SKILLS_FILE."
+            "No role queries loaded. Provide IT_ROLE_QUERIES or IT_SKILLS_FILE "
+            "(roles file or skills file for language-to-role mapping)."
         )
 
     target_label = "unlimited" if target_per_query is None else str(target_per_query)

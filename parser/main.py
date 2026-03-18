@@ -8,18 +8,18 @@ from psycopg2 import OperationalError
 from .config import get_settings
 from .db import connection_scope
 from .hh_client import HHClient
-from .it_queries import load_technology_queries_from_file
+from .it_queries import DEFAULT_IT_ROLE_QUERIES, load_role_queries_from_file
 from .pipeline import load_vacancies
 from .schema import create_schema, recreate_schema
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="HH vacancies parser to PostgreSQL")
-    parser.add_argument("--query", default="", help="Single technology query for HH API")
+    parser.add_argument("--query", default="", help="Single role query for HH API")
     parser.add_argument(
         "--queries-file",
         default="",
-        help="Path to technologies file (one skill per line).",
+        help="Path to role queries file (one role per line).",
     )
     parser.add_argument("--area", type=int, default=113, help="HH area id (113 = Russia)")
     parser.add_argument("--pages", type=int, default=3, help="Pages to fetch")
@@ -45,22 +45,14 @@ def run() -> None:
     if args.query.strip():
         queries = [args.query.strip()]
     else:
+        queries = []
         if args.queries_file.strip():
-            queries_file = Path(args.queries_file.strip())
-        else:
-            root = Path(__file__).resolve().parents[2]
-            preferred = root / "skills-row-unique.txt"
-            if preferred.exists():
-                queries_file = preferred
-            else:
-                queries_file = root / "skills-raw-unique.txt"
-                if not queries_file.exists():
-                    # support workspace layout where skills are in TGApp sibling folder
-                    queries_file = root / "TGApp" / "skills-raw-unique.txt"
-        queries = load_technology_queries_from_file(queries_file)
+            queries = load_role_queries_from_file(Path(args.queries_file.strip()))
+        if not queries:
+            queries = DEFAULT_IT_ROLE_QUERIES
 
     if not queries:
-        raise SystemExit("No technology queries found. Provide --query or a valid --queries-file.")
+        raise SystemExit("No role queries found. Provide --query or a valid --queries-file.")
 
     try:
         with connection_scope(settings) as conn:
